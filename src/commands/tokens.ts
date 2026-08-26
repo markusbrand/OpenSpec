@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import path from 'path';
 import { promises as fs } from 'fs';
 import chalk from 'chalk';
@@ -8,6 +8,7 @@ import { getActiveChangeIds } from '../utils/item-discovery.js';
 import { compileTokenLedger, formatLedgerMarkdown } from '../core/tokens/ledger.js';
 import { formatTokenBadge, formatTokenCount, formatCostUsd } from '../utils/token-format.js';
 import { isInteractive } from '../utils/interactive.js';
+import { COMMON_FLAGS } from '../core/completions/shared-flags.js';
 
 export interface TokensShowOptions {
   json?: boolean;
@@ -25,18 +26,31 @@ export interface TokensAggregateOptions {
 }
 
 export class TokensCommand {
-  async show(changeName?: string, options: TokensShowOptions = {}): Promise<void> {
-    const root = await resolveRootForCommand(options, { json: options.json });
-    if (!root) return;
+  private rootPath?: string;
 
-    const projectRoot = root.path;
+  constructor(rootPath?: string) {
+    this.rootPath = rootPath;
+  }
+
+  async show(changeName?: string, options: TokensShowOptions = {}): Promise<void> {
+    let projectRoot: string;
+    let root: any = null;
+
+    if (this.rootPath) {
+      projectRoot = this.rootPath;
+    } else {
+      root = await resolveRootForCommand(options, { json: options.json });
+      if (!root) return;
+      projectRoot = root.path;
+    }
+
     const changesDir = path.join(projectRoot, 'openspec', 'changes');
 
     if (!changeName) {
       const changes = await getActiveChangeIds(projectRoot);
       if (changes.length === 0) {
         if (options.json) {
-          console.log(JSON.stringify({ changes: [], ...(options.json ? { root: toRootOutput(root) } : {}) }, null, 2));
+          console.log(JSON.stringify({ changes: [], ...(options.json && root ? { root: toRootOutput(root) } : {}) }, null, 2));
         } else {
           console.log('No active changes found.');
         }
@@ -58,7 +72,7 @@ export class TokensCommand {
       }
 
       if (options.json) {
-        console.log(JSON.stringify({ changes: results, ...(options.json ? { root: toRootOutput(root) } : {}) }, null, 2));
+        console.log(JSON.stringify({ changes: results, ...(options.json && root ? { root: toRootOutput(root) } : {}) }, null, 2));
         return;
       }
 
@@ -82,7 +96,7 @@ export class TokensCommand {
 
     if (!meta || !meta.tokens) {
       if (options.json) {
-        console.log(JSON.stringify({ name: changeName, tokens: null, ...(options.json ? { root: toRootOutput(root) } : {}) }, null, 2));
+        console.log(JSON.stringify({ name: changeName, tokens: null, ...(options.json && root ? { root: toRootOutput(root) } : {}) }, null, 2));
       } else {
         console.log(`No token usage recorded for change "${changeName}".`);
       }
@@ -98,7 +112,7 @@ export class TokensCommand {
         name: changeName,
         tokens: t,
         badge,
-        ...(options.json ? { root: toRootOutput(root) } : {}),
+        ...(options.json && root ? { root: toRootOutput(root) } : {}),
       }, null, 2));
       return;
     }
@@ -120,10 +134,16 @@ export class TokensCommand {
   }
 
   async aggregate(options: TokensAggregateOptions = {}): Promise<void> {
-    const root = await resolveRootForCommand(options, { json: options.json });
-    if (!root) return;
+    let projectRoot: string;
 
-    const projectRoot = root.path;
+    if (this.rootPath) {
+      projectRoot = this.rootPath;
+    } else {
+      const root = await resolveRootForCommand(options, { json: options.json });
+      if (!root) return;
+      projectRoot = root.path;
+    }
+
     const data = await compileTokenLedger(projectRoot, {
       outputJson: options.outputJson,
       outputMd: options.outputMd,
@@ -150,7 +170,6 @@ export function registerTokensCommand(program: Command): void {
     .command('show [change-name]')
     .description('Show token metrics for a change or all active changes')
     .option('--json', 'Output as JSON')
-    .option('--store <id>', 'Target store ID')
     .action(async (changeName?: string, options?: TokensShowOptions) => {
       try {
         const cmd = new TokensCommand();
@@ -167,7 +186,6 @@ export function registerTokensCommand(program: Command): void {
     .option('--output-json <path>', 'Custom path for output JSON ledger')
     .option('--output-md <path>', 'Custom path for output Markdown ledger')
     .option('--json', 'Output ledger data as JSON to stdout')
-    .option('--store <id>', 'Target store ID')
     .action(async (options?: TokensAggregateOptions) => {
       try {
         const cmd = new TokensCommand();

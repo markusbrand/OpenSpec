@@ -60,5 +60,6 @@ export function formatTokenCount(tokens?: number | null): string {
  */
 export function formatCostUsd(cost?: number | null): string {
   if (cost === undefined || cost === null) return '$0.00';
-  return `$${cost.toFixed(2)}`;
+  const rounded = (Math.round((cost + Number.EPSILON) * 100) / 100).toFixed(2);
+  return `$${rounded}`;
 }

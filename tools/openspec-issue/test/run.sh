@@ -389,6 +389,63 @@ else
   no "local-storage guard self-test"
 fi
 
+# 22. Token usage tracking and label management
+store22="$(new_store)"
+tkm="$(meta_file token-change proposed)"
+run "$store22" render-body --meta "$tkm" --proposal "$FIX/proposal.md" >"$BODY"
+run "$store22" create --name token-change --title "Token Change" --body-file "$BODY" >/dev/null
+tkn="$(run "$store22" find token-change)"
+
+# record initial tokens
+rec_out="$(run "$store22" record-tokens "$tkn" --input 1500 --output 500 --cached 200 --cost 0.05 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .tokens.total==2000 and .label=="tokens:2k"' >/dev/null 2>&1 <<<"$rec_out"; } \
+  && ok "record-tokens records initial tokens and sets badge label" || no "record-tokens initial ($rc:$rec_out)"
+
+# verify label attached to issue
+grep -qxF "tokens:2k" "$store22/issues/$tkn/labels" 2>/dev/null \
+  && ok "badge label tokens:2k attached to issue" || no "badge label attached"
+
+# incremental record updates totals and label
+rec2_out="$(run "$store22" record-tokens "$tkn" --input 120000 --output 30000 --cost 1.20 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .tokens.input==121500 and .tokens.output==30500 and .tokens.total==152000 and .label=="tokens:152k"' >/dev/null 2>&1 <<<"$rec2_out"; } \
+  && ok "record-tokens incremental updates metrics and replaces badge label" || no "record-tokens incremental ($rc:$rec2_out)"
+
+# old label removed and new label added
+! grep -qxF "tokens:2k" "$store22/issues/$tkn/labels" 2>/dev/null && grep -qxF "tokens:152k" "$store22/issues/$tkn/labels" 2>/dev/null \
+  && ok "old badge label replaced by new badge label" || no "label replacement"
+
+# get-tokens retrieves tokens object
+get_out="$(run "$store22" get-tokens "$tkn" 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .tokens.total==152000' >/dev/null 2>&1 <<<"$get_out"; } \
+  && ok "get-tokens retrieves token metadata" || no "get-tokens ($rc:$get_out)"
+
+# replace mode overwrites tokens
+rep_out="$(run "$store22" record-tokens "$tkn" --input 500 --output 200 --replace 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .tokens.total==700 and .label=="tokens:<1k"' >/dev/null 2>&1 <<<"$rep_out"; } \
+  && ok "record-tokens replace mode overwrites tokens" || no "record-tokens replace ($rc:$rep_out)"
+
+# refresh-token-label
+ref_out="$(run "$store22" refresh-token-label "$tkn" 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .label=="tokens:<1k"' >/dev/null 2>&1 <<<"$ref_out"; } \
+  && ok "refresh-token-label verifies badge label" || no "refresh-token-label ($rc:$ref_out)"
+
+# aggregate-tokens writes ledger files
+agg_json="$store22/token-usage.json"
+agg_md="$store22/token-usage.md"
+agg_out="$(run "$store22" aggregate-tokens --output-json "$agg_json" --output-md "$agg_md" 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && jq -e '.ok==true and .totals.totalTokens==700' >/dev/null 2>&1 <<<"$agg_out" && [[ -f "$agg_json" ]] && [[ -f "$agg_md" ]]; } \
+  && ok "aggregate-tokens generates json and md ledger files" || no "aggregate-tokens ($rc:$agg_out)"
+
+# post-token operations validation passes
+run "$store22" validate "$tkn" >/dev/null 2>&1 \
+  && ok "post-token issue validate passes" || no "post-token validate"
+
 rm -f "$BODY"
 # cleanup stores
 rm -rf "$HERE"/.store.$$* "$HERE"/.sec.$$* "$HERE"/.body.$$ "$HERE"/.meta.$$* 2>/dev/null || true
