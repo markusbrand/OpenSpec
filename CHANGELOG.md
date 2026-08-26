@@ -1,5 +1,31 @@
 # @fission-ai/openspec
 
+## [1.11.0](https://github.com/markusbrand/OpenSpec/compare/v1.10.0...v1.11.0) (2026-08-26)
+
+
+### Features
+
+* add spec-driven-github schema and openspec-issue adapter tooling ([94d6ca6](https://github.com/markusbrand/OpenSpec/commit/94d6ca604453fd8b85a53dd49278787e8f40ba3f))
+
+
+### Bug Fixes
+
+* **ci:** enable release-please workflow on repository ([3c24bff](https://github.com/markusbrand/OpenSpec/commit/3c24bfff9ae919e87e3319c1cd6ec2666427c8bd))
+* **ci:** tolerate disabled dependency graph in dependency-review action ([f01e0b6](https://github.com/markusbrand/OpenSpec/commit/f01e0b6a95b91bb83121e1ef609239e88901a284))
+* **ci:** update release-please-action reference ([9e5d463](https://github.com/markusbrand/OpenSpec/commit/9e5d46365dc55e6750cda58d9805b18864eec05d))
+* **nix:** update pnpm-deps hash in flake.nix ([3dbf00f](https://github.com/markusbrand/OpenSpec/commit/3dbf00f9fe10e9c84a6438a977fcb21431a5f044))
+
+
+### Documentation
+
+* rebuild docs site from docs-lab ([#1649](https://github.com/markusbrand/OpenSpec/issues/1649)) ([f1b521d](https://github.com/markusbrand/OpenSpec/commit/f1b521dffac38ed6638689cd28b0c204b1eef0f1))
+
+
+### Miscellaneous Chores
+
+* **deps:** bump the website-dependencies group ([#1719](https://github.com/markusbrand/OpenSpec/issues/1719)) ([6926ccb](https://github.com/markusbrand/OpenSpec/commit/6926ccb18afa4ff621112813e9968334576ee11a))
+* **release:** integrate release-please and deprecate changesets ([c926f9b](https://github.com/markusbrand/OpenSpec/commit/c926f9ba0528ef01f9b983a99866b3c8ca392757))
+
 ## 1.10.0
 
 ### Minor Changes
