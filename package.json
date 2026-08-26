@@ -55,15 +55,12 @@
     "prepublishOnly": "pnpm run build",
     "check:pack-version": "node scripts/pack-version-check.mjs",
     "release": "pnpm run release:ci",
-    "release:ci": "pnpm run check:pack-version && pnpm exec changeset publish",
-    "changeset": "changeset"
+    "release:ci": "pnpm run check:pack-version && npm publish --provenance --access public"
   },
   "engines": {
     "node": ">=20.19.0"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.1",
     "@types/node": "^20.19.43",
     "@vitest/ui": "^3.2.6",
     "eslint": "^10.5.0",
