@@ -34,6 +34,7 @@
     "dist",
     "bin",
     "schemas",
+    "tools",
     "!dist/**/*.test.js",
     "!dist/**/__tests__",
     "!dist/**/*.map"
@@ -46,6 +47,7 @@
     "dev": "tsc --watch",
     "dev:cli": "pnpm build && node bin/openspec.js",
     "test": "vitest run",
+    "test:adapter": "bash tools/openspec-issue/test/run.sh && bash tools/openspec-issue/test/run-migration.sh && bash tools/openspec-issue/check-local-change-storage.sh --self-test",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
