@@ -543,6 +543,44 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
           COMMON_FLAGS.noInteractive,
         ],
       },
+      {
+        name: 'record-tokens',
+        description: 'Record LLM token usage metrics for a change',
+        acceptsPositional: true,
+        positionalType: 'change-id',
+        positionals: [{ name: 'change-name', type: 'change-id' }],
+        flags: [
+          {
+            name: 'input',
+            description: 'Input token count',
+            takesValue: true,
+          },
+          {
+            name: 'output',
+            description: 'Output token count',
+            takesValue: true,
+          },
+          {
+            name: 'cached',
+            description: 'Cached input token count',
+            takesValue: true,
+          },
+          {
+            name: 'cost',
+            description: 'Estimated cost in USD',
+            takesValue: true,
+          },
+          {
+            name: 'incremental',
+            description: 'Add to existing recorded tokens (default)',
+          },
+          {
+            name: 'replace',
+            description: 'Replace existing recorded tokens',
+          },
+          COMMON_FLAGS.json,
+        ],
+      },
     ],
   },
   {
@@ -804,6 +842,40 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
             name: 'force',
             description: 'Overwrite existing schema',
           },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'tokens',
+    description: 'Track and display LLM token usage',
+    flags: [],
+    subcommands: [
+      {
+        name: 'show',
+        description: 'Show token metrics for a change or all active changes',
+        acceptsPositional: true,
+        positionalType: 'change-id',
+        positionals: [{ name: 'change-name', type: 'change-id', optional: true }],
+        flags: [
+          COMMON_FLAGS.json,
+        ],
+      },
+      {
+        name: 'aggregate',
+        description: 'Aggregate token usage ledger into openspec/token-usage.json and openspec/token-usage.md',
+        flags: [
+          {
+            name: 'output-json',
+            description: 'Custom path for output JSON ledger',
+            takesValue: true,
+          },
+          {
+            name: 'output-md',
+            description: 'Custom path for output Markdown ledger',
+            takesValue: true,
+          },
+          COMMON_FLAGS.json,
         ],
       },
     ],

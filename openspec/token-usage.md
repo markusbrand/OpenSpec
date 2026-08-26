@@ -1,6 +1,6 @@
 # OpenSpec Token Usage Ledger
 
-**Last Updated:** 2026-08-26T21:48:57Z
+**Last Updated:** 2026-08-26T21:58:42Z
 
 ## Summary Totals
 - **Total Input Tokens:** 0
