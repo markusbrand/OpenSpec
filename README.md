@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/Fission-AI/OpenSpec">
+  <a href="https://github.com/markusbrand/OpenSpec">
     <picture>
       <source srcset="assets/openspec_bg.png">
       <img src="assets/openspec_bg.png" alt="OpenSpec logo">
@@ -8,8 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Fission-AI/OpenSpec/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Fission-AI/OpenSpec/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="https://www.npmjs.com/package/@fission-ai/openspec"><img alt="npm version" src="https://img.shields.io/npm/v/@fission-ai/openspec?style=flat-square" /></a>
+  <a href="https://github.com/markusbrand/OpenSpec/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/markusbrand/OpenSpec/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
   <a href="https://discord.gg/YctCnvvshC"><img alt="Discord" src="https://img.shields.io/discord/1411657095639601154?style=flat-square&logo=discord&logoColor=white&label=Discord&suffix=%20online" /></a>
 </p>
@@ -17,9 +16,8 @@
 <details>
 <summary><strong>The most loved spec framework.</strong></summary>
 
-[![Stars](https://img.shields.io/github/stars/Fission-AI/OpenSpec?style=flat-square&label=Stars)](https://github.com/Fission-AI/OpenSpec/stargazers)
-[![Downloads](https://img.shields.io/npm/dm/@fission-ai/openspec?style=flat-square&label=Downloads/mo)](https://www.npmjs.com/package/@fission-ai/openspec)
-[![Contributors](https://img.shields.io/github/contributors/Fission-AI/OpenSpec?style=flat-square&label=Contributors)](https://github.com/Fission-AI/OpenSpec/graphs/contributors)
+[![Stars](https://img.shields.io/github/stars/markusbrand/OpenSpec?style=flat-square&label=Stars)](https://github.com/markusbrand/OpenSpec/stargazers)
+[![Contributors](https://img.shields.io/github/contributors/markusbrand/OpenSpec?style=flat-square&label=Contributors)](https://github.com/markusbrand/OpenSpec/graphs/contributors)
 
 </details>
 <p></p>
@@ -124,10 +122,27 @@ Solo, OpenSpec keeps you and your AI honest on a single repo. On a team, the har
 
 **Requires Node.js 20.19.0 or higher.**
 
-Install OpenSpec globally:
+Install OpenSpec globally from this repository:
 
 ```bash
-npm install -g @fission-ai/openspec@latest
+npm install -g github:markusbrand/OpenSpec
+```
+
+Alternatively, install using **pnpm**, **bun**, or from source:
+
+```bash
+# via pnpm
+pnpm add -g github:markusbrand/OpenSpec
+
+# via bun
+bun add -g github:markusbrand/OpenSpec
+
+# from source / local clone
+git clone https://github.com/markusbrand/OpenSpec.git
+cd OpenSpec
+pnpm install
+pnpm run build
+npm link # or pnpm link --global
 ```
 
 Then navigate to your project directory and initialize:
@@ -204,7 +219,7 @@ AI coding assistants are powerful but unpredictable when requirements live only 
 **Upgrade the package**
 
 ```bash
-npm install -g @fission-ai/openspec@latest
+npm install -g github:markusbrand/OpenSpec
 ```
 
 **Refresh agent instructions**
