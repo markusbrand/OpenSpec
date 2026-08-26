@@ -144,6 +144,11 @@ export async function runCLI(args: string[] = [], options: RunCLIOptions = {}): 
     explicitConfigHome !== undefined
       ? undefined
       : await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-cli-config-'));
+  const explicitDataHome = options.env?.XDG_DATA_HOME;
+  const isolatedDataHome =
+    explicitDataHome !== undefined
+      ? undefined
+      : await fs.mkdtemp(path.join(os.tmpdir(), 'openspec-cli-data-'));
 
   return new Promise<RunCLIResult>((resolve, reject) => {
     const timeoutMs = options.timeoutMs ?? DEFAULT_CLI_TIMEOUT_MS;
@@ -155,6 +160,7 @@ export async function runCLI(args: string[] = [], options: RunCLIOptions = {}): 
           OPENSPEC_TELEMETRY: '0',
           OPEN_SPEC_INTERACTIVE: '0',
           XDG_CONFIG_HOME: explicitConfigHome ?? isolatedConfigHome,
+          XDG_DATA_HOME: explicitDataHome ?? isolatedDataHome,
         },
         options.env
       ),
@@ -236,6 +242,9 @@ export async function runCLI(args: string[] = [], options: RunCLIOptions = {}): 
     if (isolatedConfigHome) {
       // Never let cleanup replace the CLI result or a genuine CLI failure.
       await fs.rm(isolatedConfigHome, { recursive: true, force: true }).catch(() => {});
+    }
+    if (isolatedDataHome) {
+      await fs.rm(isolatedDataHome, { recursive: true, force: true }).catch(() => {});
     }
   });
 }

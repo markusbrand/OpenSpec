@@ -21,6 +21,8 @@ describe('artifact-graph/resolver', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-resolver-test-'));
     originalEnv = { ...process.env };
+    process.env.XDG_DATA_HOME = path.join(tempDir, 'data');
+    process.env.XDG_CONFIG_HOME = path.join(tempDir, 'config');
   });
 
   afterEach(() => {
