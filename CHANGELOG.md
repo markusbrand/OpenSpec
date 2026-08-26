@@ -1,5 +1,17 @@
 # @fission-ai/openspec
 
+## [3.1.0](https://github.com/markusbrand/OpenSpec/compare/v3.0.0...v3.1.0) (2026-08-26)
+
+
+### Features
+
+* **tokens:** implement token usage tracking across CLI and GitHub adapter ([e938afc](https://github.com/markusbrand/OpenSpec/commit/e938afcb5f72d55d10427c77a84df30f6fc3436e))
+
+
+### Bug Fixes
+
+* **ci:** restrict npm publish to canonical repository ([75963ef](https://github.com/markusbrand/OpenSpec/commit/75963ef772cfa806a74f6ae7df86440a16fb5641))
+
 ## [3.0.0](https://github.com/markusbrand/OpenSpec/compare/v2.0.0...v3.0.0) (2026-08-26)
 
 
