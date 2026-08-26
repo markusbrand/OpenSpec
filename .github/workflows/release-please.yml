@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   release-please:
-    if: github.repository == 'Fission-AI/OpenSpec'
     runs-on: ubuntu-latest
     permissions:
       contents: write
