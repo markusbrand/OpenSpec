@@ -51,8 +51,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "prepare": "pnpm run build",
-    "prepublishOnly": "pnpm run build",
+    "prepare": "node build.js",
+    "prepublishOnly": "node build.js",
     "check:pack-version": "node scripts/pack-version-check.mjs",
     "release": "pnpm run release:ci",
     "release:ci": "pnpm run check:pack-version && npm publish --provenance --access public"

@@ -125,8 +125,13 @@ Solo, OpenSpec keeps you and your AI honest on a single repo. On a team, the har
 Install OpenSpec globally from this repository:
 
 ```bash
-npm install -g github:markusbrand/OpenSpec
+npm install -g github:markusbrand/OpenSpec --allow-git=all
 ```
+
+> **Note on npm 12+ (`EALLOWGIT` error)**: If npm reports `npm error code EALLOWGIT` / `Fetching packages of type "git" have been disabled`, add `--allow-git=all` to the command above, or enable it globally via:
+> ```bash
+> npm config set allow-git all
+> ```
 
 Alternatively, install using **pnpm**, **bun**, or from source:
 
@@ -219,7 +224,7 @@ AI coding assistants are powerful but unpredictable when requirements live only 
 **Upgrade the package**
 
 ```bash
-npm install -g github:markusbrand/OpenSpec
+npm install -g github:markusbrand/OpenSpec --allow-git=all
 ```
 
 **Refresh agent instructions**
