@@ -21,6 +21,16 @@ import {
   diffRequirementBlock,
   buildRenameMap,
 } from '../utils/requirement-diff.js';
+import {
+  readChangeMetadata,
+  writeChangeMetadata,
+  resolveSchemaForChange,
+} from '../utils/change-metadata.js';
+import {
+  formatTokenBadge,
+  formatTokenCount,
+  formatCostUsd,
+} from '../utils/token-format.js';
 
 /**
  * True only when `target` is definitively absent. An EACCES or I/O failure
@@ -156,6 +166,7 @@ export class ChangeCommand {
       const title = this.extractTitle(contentForTitle, changeName);
       const id = parsed.name;
       const deltas = parsed.deltas || [];
+      const meta = readChangeMetadata(changeDir, this.rootPath ?? process.cwd());
 
       if (options.diff) {
         await this.enrichDeltasWithDiffs(deltas, changeName, changesPath);
@@ -166,6 +177,7 @@ export class ChangeCommand {
         title,
         deltaCount: deltas.length,
         deltas,
+        ...(meta?.tokens ? { tokens: meta.tokens } : {}),
         ...(options.rootOutput ? { root: options.rootOutput } : {}),
       };
       console.log(JSON.stringify(output, null, 2));
@@ -173,6 +185,16 @@ export class ChangeCommand {
       FileSystemUtils.assertPathWithin(changeDir, proposalPath);
       const content = await fs.readFile(proposalPath, 'utf-8');
       console.log(content);
+
+      const meta = readChangeMetadata(changeDir, this.rootPath ?? process.cwd());
+      if (meta?.tokens) {
+        const t = meta.tokens;
+        const total = t.total ?? (t.input + t.output);
+        const badge = formatTokenBadge(total);
+        console.log();
+        console.log(chalk.bold(`Token Usage: [${chalk.yellow(badge)}]`));
+        console.log(`  Input: ${formatTokenCount(t.input)} | Output: ${formatTokenCount(t.output)} | Total: ${formatTokenCount(total)}${t.cost_usd !== undefined ? ` | Cost: ${formatCostUsd(t.cost_usd)}` : ''}`);
+      }
 
       if (options?.diff) {
         await this.showSpecDiffs(changeName, changesPath);
@@ -587,5 +609,132 @@ export class ChangeCommand {
     }
     console.error('Next steps:');
     bullets.forEach(b => console.error(`  ${b}`));
+  }
+
+  /**
+   * Record token usage for a change.
+   * `openspec change record-tokens <change-name> --input <N> --output <M> [--cached <K>] [--cost <USD>] [--incremental|--replace]`
+   */
+  async recordTokens(
+    changeName: string,
+    options: {
+      input: number | string;
+      output: number | string;
+      cached?: number | string;
+      cost?: number | string;
+      incremental?: boolean;
+      replace?: boolean;
+      json?: boolean;
+      store?: string;
+      storePath?: string;
+    }
+  ): Promise<void> {
+    const changesPath = this.getChangesPath();
+    const projectRoot = this.rootPath ?? process.cwd();
+    const changeDir = path.join(changesPath, changeName);
+
+    if (!isChangeDirectoryName(changesPath, changeDir)) {
+      throw new Error(`Change "${changeName}" not found under ${changesPath}`);
+    }
+
+    try {
+      await fs.access(changeDir);
+    } catch {
+      throw new Error(`Change "${changeName}" not found at ${changeDir}`);
+    }
+
+    const inputVal = Number(options.input);
+    const outputVal = Number(options.output);
+    if (!Number.isInteger(inputVal) || inputVal < 0) {
+      throw new Error(`--input must be a non-negative integer, got "${options.input}"`);
+    }
+    if (!Number.isInteger(outputVal) || outputVal < 0) {
+      throw new Error(`--output must be a non-negative integer, got "${options.output}"`);
+    }
+
+    let cachedVal: number | undefined = undefined;
+    if (options.cached !== undefined) {
+      cachedVal = Number(options.cached);
+      if (!Number.isInteger(cachedVal) || cachedVal < 0) {
+        throw new Error(`--cached must be a non-negative integer, got "${options.cached}"`);
+      }
+    }
+
+    let costVal: number | undefined = undefined;
+    if (options.cost !== undefined) {
+      costVal = Number(options.cost);
+      if (Number.isNaN(costVal) || costVal < 0) {
+        throw new Error(`--cost must be a non-negative number, got "${options.cost}"`);
+      }
+    }
+
+    let metadata = readChangeMetadata(changeDir, projectRoot);
+    if (!metadata) {
+      const schemaName = resolveSchemaForChange(changeDir, undefined, projectRoot);
+      metadata = {
+        schema: schemaName,
+        created: new Date().toISOString().split('T')[0],
+      };
+    }
+
+    const isReplace = options.replace === true;
+    let finalInput: number;
+    let finalOutput: number;
+    let finalCached: number | undefined;
+    let finalCost: number | undefined;
+
+    if (isReplace || !metadata.tokens) {
+      finalInput = inputVal;
+      finalOutput = outputVal;
+      finalCached = cachedVal;
+      finalCost = costVal;
+    } else {
+      finalInput = (metadata.tokens.input ?? 0) + inputVal;
+      finalOutput = (metadata.tokens.output ?? 0) + outputVal;
+      if (cachedVal !== undefined || metadata.tokens.cached !== undefined) {
+        finalCached = (metadata.tokens.cached ?? 0) + (cachedVal ?? 0);
+      }
+      if (costVal !== undefined || metadata.tokens.cost_usd !== undefined) {
+        const prevCost = metadata.tokens.cost_usd ?? 0;
+        finalCost = Math.round((prevCost + (costVal ?? 0)) * 100) / 100;
+      }
+    }
+
+    const finalTotal = finalInput + finalOutput;
+    const updatedAt = new Date().toISOString();
+
+    metadata.tokens = {
+      input: finalInput,
+      output: finalOutput,
+      ...(finalCached !== undefined ? { cached: finalCached } : {}),
+      total: finalTotal,
+      ...(finalCost !== undefined ? { cost_usd: finalCost } : {}),
+      updated_at: updatedAt,
+    };
+
+    writeChangeMetadata(changeDir, metadata, projectRoot);
+
+    const badge = formatTokenBadge(finalTotal);
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        ok: true,
+        change: changeName,
+        tokens: metadata.tokens,
+        badge,
+      }, null, 2));
+      return;
+    }
+
+    console.log(chalk.green(`✔ Recorded tokens for change "${changeName}":`));
+    console.log(`  Input:  ${formatTokenCount(finalInput)}`);
+    console.log(`  Output: ${formatTokenCount(finalOutput)}`);
+    if (finalCached !== undefined) {
+      console.log(`  Cached: ${formatTokenCount(finalCached)}`);
+    }
+    console.log(`  Total:  ${formatTokenCount(finalTotal)} [${chalk.yellow(badge)}]`);
+    if (finalCost !== undefined) {
+      console.log(`  Cost:   ${formatCostUsd(finalCost)}`);
+    }
   }
 }

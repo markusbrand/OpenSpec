@@ -168,6 +168,22 @@ validate_metadata_json() {
   if [[ "$ad" != "null" ]]; then
     is_date "$ad" || die "$EX_MALFORMED" "$ctx: archivedDate must be null or a valid YYYY-MM-DD date (got '$ad')"
   fi
+  local has_tokens
+  has_tokens="$(jq -r 'has("tokens") and .tokens != null' <<<"$meta")"
+  if [[ "$has_tokens" == "true" ]]; then
+    jq -e '.tokens | type=="object"' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens must be a JSON object"
+    jq -e '.tokens.input | (type=="number" and . >= 0 and . == floor)' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens.input must be a non-negative integer"
+    jq -e '.tokens.output | (type=="number" and . >= 0 and . == floor)' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens.output must be a non-negative integer"
+    jq -e '.tokens.cached == null or (.tokens.cached | (type=="number" and . >= 0 and . == floor))' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens.cached must be a non-negative integer"
+    jq -e '.tokens.total == null or (.tokens.total | (type=="number" and . >= 0 and . == floor))' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens.total must be a non-negative integer"
+    jq -e '(.tokens.costUsd == null and .tokens.cost_usd == null) or (.tokens.costUsd // .tokens.cost_usd | (type=="number" and . >= 0))' >/dev/null 2>&1 <<<"$meta" \
+      || die "$EX_MALFORMED" "$ctx: tokens.costUsd must be a non-negative number"
+  fi
 }
 
 validate_body_string() {
@@ -700,6 +716,9 @@ cmd_set_lifecycle() {
     err "$(cat "$WORKDIR/lc.err" 2>/dev/null || true)"
     die "$rc" "set-lifecycle '$cur' -> '$lifecycle' failed for issue #$num; restored prior label/body/state"
   fi
+  if [[ "$lifecycle" == "completed" ]]; then
+    cmd_aggregate_tokens >/dev/null 2>&1 || true
+  fi
   jq -nc --argjson n "$num" --arg l "$lifecycle" '{ok:true, number:$n, lifecycle:$l}'
 }
 
@@ -799,6 +818,326 @@ cmd_render_body() {
   render_body "$(cat "$meta")" "$p" "$r" "$d" "$t" "$v"
 }
 
+format_token_badge() {
+  local total="$1"
+  if [[ "$total" -lt 1000 ]]; then
+    printf 'tokens:<1k\n'
+  elif [[ "$total" -lt 1000000 ]]; then
+    local k=$(( (total + 500) / 1000 ))
+    printf 'tokens:%dk\n' "$k"
+  else
+    awk -v t="$total" 'BEGIN { printf "tokens:%.1fM\n", t/1000000 }'
+  fi
+}
+
+token_label_color() {
+  local total="$1"
+  if [[ "$total" -lt 1000 ]]; then
+    printf 'cfd3d7\n'
+  elif [[ "$total" -lt 100000 ]]; then
+    printf '0e8a16\n'
+  elif [[ "$total" -lt 1000000 ]]; then
+    printf 'fbca04\n'
+  else
+    printf 'd93f0b\n'
+  fi
+}
+
+ensure_token_label() {
+  local label="$1" color="$2"
+  local existing
+  existing="$(gh_call label list --limit 200 --json name --jq '.[].name' 2>/dev/null || true)"
+  if grep -qxF "$label" <<<"$existing"; then
+    gh_call label edit "$label" --color "$color" --description "OpenSpec token usage badge" >/dev/null 2>&1 || true
+  else
+    gh_call label create "$label" --color "$color" --description "OpenSpec token usage badge" >/dev/null 2>&1 || true
+  fi
+}
+
+cmd_record_tokens() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]] && usage
+  local num="${1:?issue}"; shift
+  if [[ ! "$num" =~ ^[0-9]+$ ]]; then num="$(cmd_find "$num")"; fi
+
+  local input="" output="" cached="" cost="" mode="incremental"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --input) input="$2"; shift 2;;
+      --output) output="$2"; shift 2;;
+      --cached) cached="$2"; shift 2;;
+      --cost) cost="$2"; shift 2;;
+      --incremental) mode="incremental"; shift;;
+      --replace) mode="replace"; shift;;
+      -h|--help|help) usage;;
+      *) die "$EX_USAGE" "unknown arg: $1";;
+    esac
+  done
+
+  [[ -n "$input" ]] || die "$EX_USAGE" "record-tokens requires --input"
+  [[ -n "$output" ]] || die "$EX_USAGE" "record-tokens requires --output"
+  [[ "$input" =~ ^[0-9]+$ ]] || die "$EX_USAGE" "--input must be a non-negative integer (got '$input')"
+  [[ "$output" =~ ^[0-9]+$ ]] || die "$EX_USAGE" "--output must be a non-negative integer (got '$output')"
+  if [[ -n "$cached" ]]; then
+    [[ "$cached" =~ ^[0-9]+$ ]] || die "$EX_USAGE" "--cached must be a non-negative integer (got '$cached')"
+  fi
+  if [[ -n "$cost" ]]; then
+    [[ "$cost" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "$EX_USAGE" "--cost must be a non-negative number (got '$cost')"
+  fi
+
+  local body meta
+  body="$(issue_body "$num")"
+  validate_body_string "$body"
+  meta="$(printf '%s' "$body" | extract_metadata)"
+
+  ensure_workdir
+  local prior_body_file="$WORKDIR/rt.prior.body"
+  printf '%s' "$body" >"$prior_body_file"
+  local prior_labels=() _l
+  while IFS= read -r _l || [[ -n "$_l" ]]; do
+    [[ -n "$_l" ]] && prior_labels+=("$_l")
+  done < <(issue_labels "$num")
+
+  local prev_tokens
+  prev_tokens="$(jq -c '.tokens // null' <<<"$meta")"
+
+  local new_tokens
+  new_tokens="$(jq -c \
+    --arg mode "$mode" \
+    --argjson in "$input" \
+    --argjson out "$output" \
+    --arg cached "$cached" \
+    --arg cost "$cost" \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '
+    def to_num(s): if s == "" or s == null then null else (s | tonumber) end;
+    def c_num: to_num($cached);
+    def cost_num: to_num($cost);
+    
+    if $mode == "replace" or . == null then
+      {
+        input: $in,
+        output: $out,
+        cached: (if c_num != null then c_num else null end),
+        total: ($in + $out),
+        costUsd: (if cost_num != null then cost_num else null end),
+        updatedAt: $now
+      }
+    else
+      {
+        input: ((.input // 0) + $in),
+        output: ((.output // 0) + $out),
+        cached: (if c_num != null or .cached != null then ((.cached // 0) + (c_num // 0)) else null end),
+        total: (((.input // 0) + $in) + ((.output // 0) + $out)),
+        costUsd: (if cost_num != null or .costUsd != null or .cost_usd != null then (((.costUsd // .cost_usd // 0) + (cost_num // 0) | .*100 | round) / 100) else null end),
+        updatedAt: $now
+      }
+    end | with_entries(select(.value != null))
+    ' <<<"$prev_tokens")"
+
+  local total_tokens badge color
+  total_tokens="$(jq -r '.total' <<<"$new_tokens")"
+  badge="$(format_token_badge "$total_tokens")"
+  color="$(token_label_color "$total_tokens")"
+
+  ensure_token_label "$badge" "$color"
+
+  restore_tokens_state() {
+    gh_call issue edit "$num" --body-file "$prior_body_file" >/dev/null 2>&1 || true
+    for _l in "${prior_labels[@]}"; do
+      if [[ "$_l" =~ ^tokens: ]] && [[ "$_l" != "$badge" ]]; then
+        gh_call issue edit "$num" --add-label "$_l" >/dev/null 2>&1 || true
+      fi
+    done
+    if ! printf '%s\n' "${prior_labels[@]}" | grep -qxF "$badge"; then
+      gh_call issue edit "$num" --remove-label "$badge" >/dev/null 2>&1 || true
+    fi
+  }
+
+  do_record() {
+    for _l in "${prior_labels[@]}"; do
+      if [[ "$_l" =~ ^tokens: ]] && [[ "$_l" != "$badge" ]]; then
+        gh_call issue edit "$num" --remove-label "$_l" >/dev/null || return $?
+      fi
+    done
+    gh_call issue edit "$num" --add-label "$badge" >/dev/null || return $?
+    local work="$WORKDIR"
+    local newmeta
+    newmeta="$(jq -c --argjson t "$new_tokens" '.tokens=$t' <<<"$meta")"
+    printf '%s\n' "$newmeta" >"$work/meta"
+    awk -v mf="$work/meta" '
+      BEGIN { while ((getline line < mf) > 0) m = m line "\n" }
+      {sub(/\r$/,"")}
+      /<!-- openspec:metadata/ { print; printf "%s", m; skip=1; next }
+      /openspec:metadata-end -->/ { skip=0; print; next }
+      skip { next }
+      { print }
+    ' "$prior_body_file" >"$work/rebuilt"
+    validate_body_string "$(cat "$work/rebuilt")" || return $?
+    check_body_size "$work/rebuilt" || return $?
+    gh_call issue edit "$num" --body-file "$work/rebuilt" >/dev/null || return $?
+    validate_issue_quiet "$num" || return $?
+  }
+
+  local rc=0
+  ( do_record ) >/dev/null 2>"$WORKDIR/rt.err" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    restore_tokens_state
+    err "$(cat "$WORKDIR/rt.err" 2>/dev/null || true)"
+    die "$rc" "record-tokens failed for issue #$num; restored prior state"
+  fi
+
+  jq -nc --argjson n "$num" --argjson t "$new_tokens" --arg l "$badge" \
+    '{ok:true, number:$n, tokens:$t, label:$l}'
+}
+
+cmd_get_tokens() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]] && usage
+  local num="${1:?issue}"
+  if [[ ! "$num" =~ ^[0-9]+$ ]]; then num="$(cmd_find "$num")"; fi
+  local body meta tokens
+  body="$(issue_body "$num")"
+  validate_body_string "$body"
+  meta="$(printf '%s' "$body" | extract_metadata)"
+  tokens="$(jq -c '.tokens // null' <<<"$meta")"
+  jq -nc --argjson n "$num" --argjson t "$tokens" '{ok:true, number:$n, tokens:$t}'
+}
+
+cmd_refresh_token_label() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]] && usage
+  local num="${1:?issue}"
+  if [[ ! "$num" =~ ^[0-9]+$ ]]; then num="$(cmd_find "$num")"; fi
+  local body meta total_tokens badge color
+  body="$(issue_body "$num")"
+  validate_body_string "$body"
+  meta="$(printf '%s' "$body" | extract_metadata)"
+  total_tokens="$(jq -r '.tokens.total // empty' <<<"$meta")"
+
+  local labels=() _l
+  while IFS= read -r _l || [[ -n "$_l" ]]; do
+    [[ -n "$_l" ]] && labels+=("$_l")
+  done < <(issue_labels "$num")
+
+  if [[ -n "$total_tokens" && "$total_tokens" != "null" ]]; then
+    badge="$(format_token_badge "$total_tokens")"
+    color="$(token_label_color "$total_tokens")"
+    ensure_token_label "$badge" "$color"
+    for _l in "${labels[@]}"; do
+      if [[ "$_l" =~ ^tokens: ]] && [[ "$_l" != "$badge" ]]; then
+        gh_call issue edit "$num" --remove-label "$_l" >/dev/null 2>&1 || true
+      fi
+    done
+    gh_call issue edit "$num" --add-label "$badge" >/dev/null 2>&1 || true
+    jq -nc --argjson n "$num" --arg l "$badge" '{ok:true, number:$n, label:$l}'
+  else
+    for _l in "${labels[@]}"; do
+      if [[ "$_l" =~ ^tokens: ]]; then
+        gh_call issue edit "$num" --remove-label "$_l" >/dev/null 2>&1 || true
+      fi
+    done
+    jq -nc --argjson n "$num" '{ok:true, number:$n, label:null}'
+  fi
+}
+
+cmd_aggregate_tokens() {
+  local json_out="openspec/token-usage.json" md_out="openspec/token-usage.md"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --output-json) json_out="$2"; shift 2;;
+      --output-md) md_out="$2"; shift 2;;
+      -h|--help|help) usage;;
+      *) die "$EX_USAGE" "unknown arg: $1";;
+    esac
+  done
+
+  load_openspec_issues
+  local compiled
+  compiled="$(jq -nc \
+    --argjson issues "$OPENSPEC_ISSUES_JSON" \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '
+    def extract_meta(body):
+      (body | split("\n") |
+       reduce .[] as $line (
+         {in_meta: false, meta_lines: []};
+         if $line == "<!-- openspec:metadata" then .in_meta = true
+         elif $line == "openspec:metadata-end -->" then .in_meta = false
+         elif .in_meta then .meta_lines += [$line]
+         else . end
+       )).meta_lines | join("\n") | fromjson;
+
+    [ $issues[] |
+      . as $iss |
+      try (
+        extract_meta($iss.body) as $m |
+        if $m.tokens != null then
+          {
+            id: $m.changeName,
+            issueNumber: $iss.number,
+            name: $m.changeName,
+            lifecycle: $m.lifecycle,
+            inputTokens: ($m.tokens.input // 0),
+            outputTokens: ($m.tokens.output // 0),
+            totalTokens: ($m.tokens.total // (($m.tokens.input // 0) + ($m.tokens.output // 0))),
+            costUsd: ($m.tokens.costUsd // $m.tokens.cost_usd // 0),
+            archivedDate: ($m.archivedDate // null)
+          }
+        else empty end
+      ) catch empty
+    ] as $changes |
+    
+    ($changes | map(.inputTokens) | add // 0) as $tot_in |
+    ($changes | map(.outputTokens) | add // 0) as $tot_out |
+    ($changes | map(.totalTokens) | add // 0) as $tot_tokens |
+    (($changes | map(.costUsd // 0) | add // 0) * 100 | round / 100) as $tot_cost |
+    ([$changes[] | select(.lifecycle == "completed")] | length) as $archived_cnt |
+
+    {
+      lastUpdated: $now,
+      totals: {
+        inputTokens: $tot_in,
+        outputTokens: $tot_out,
+        totalTokens: $tot_tokens,
+        costUsd: $tot_cost,
+        archivedChangesCount: $archived_cnt
+      },
+      changes: $changes
+    }
+    ')"
+
+  mkdir -p "$(dirname "$json_out")" 2>/dev/null || true
+  mkdir -p "$(dirname "$md_out")" 2>/dev/null || true
+
+  printf '%s\n' "$compiled" >"$json_out"
+
+  local md_content
+  md_content="$(jq -r '
+    "# OpenSpec Token Usage Ledger\n\n" +
+    "**Last Updated:** " + .lastUpdated + "\n\n" +
+    "## Summary Totals\n" +
+    "- **Total Input Tokens:** " + (.totals.inputTokens | tostring) + "\n" +
+    "- **Total Output Tokens:** " + (.totals.outputTokens | tostring) + "\n" +
+    "- **Total Tokens:** " + (.totals.totalTokens | tostring) + "\n" +
+    "- **Total Cost (USD):** $" + (if .totals.costUsd == 0 then "0.00" else (.totals.costUsd | tostring) end) + "\n" +
+    "- **Archived Changes:** " + (.totals.archivedChangesCount | tostring) + "\n\n" +
+    "## Changes Breakdown\n" +
+    "| Change / Issue | Lifecycle | Input Tokens | Output Tokens | Total Tokens | Cost (USD) | Archived Date |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- |\n" +
+    (if (.changes | length) == 0 then
+      "| (none) | - | 0 | 0 | 0 | $0.00 | -\n"
+    else
+      (.changes | map("| " + .name + " (#" + (.issueNumber | tostring) + ") | " + .lifecycle + " | " + (.inputTokens | tostring) + " | " + (.outputTokens | tostring) + " | " + (.totalTokens | tostring) + " | $" + (if .costUsd == 0 then "0.00" else (.costUsd | tostring) end) + " | " + (.archivedDate // "-") + " |") | join("\n")) + "\n"
+    end)
+  ' <<<"$compiled")"
+
+  printf '%s\n' "$md_content" >"$md_out"
+
+  jq -nc \
+    --arg jo "$json_out" \
+    --arg mo "$md_out" \
+    --argjson t "$(jq '.totals' <<<"$compiled")" \
+    '{ok:true, outputJson:$jo, outputMd:$mo, totals:$t}'
+}
+
 usage() {
   cat >&2 <<'EOF'
 usage: openspec-issue.sh <command> [args]
@@ -812,6 +1151,10 @@ usage: openspec-issue.sh <command> [args]
   set-section <issue> <section> --body-file <f>
   set-metadata <issue> --key <k> --value <v>
   set-lifecycle <issue> <lifecycle>
+  record-tokens <issue> --input <N> --output <M> [--cached <K>] [--cost <USD>] [--incremental|--replace]
+  get-tokens <issue>
+  refresh-token-label <issue>
+  aggregate-tokens [--output-json <path>] [--output-md <path>]
   validate <issue>
   scan-content --body-file <f>
   render-body --meta <f> [--proposal <f>] [--requirements <f>] [--design <f>] [--tasks <f>] [--verification <f>]
@@ -834,6 +1177,10 @@ main() {
     set-section) cmd_set_section "$@";;
     set-metadata) cmd_set_metadata "$@";;
     set-lifecycle) cmd_set_lifecycle "$@";;
+    record-tokens) cmd_record_tokens "$@";;
+    get-tokens) cmd_get_tokens "$@";;
+    refresh-token-label) cmd_refresh_token_label "$@";;
+    aggregate-tokens) cmd_aggregate_tokens "$@";;
     validate) cmd_validate "$@";;
     scan-content) cmd_scan_content "$@";;
     render-body) cmd_render_body "$@";;
@@ -843,3 +1190,4 @@ main() {
 }
 
 main "$@"
+

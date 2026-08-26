@@ -5,12 +5,16 @@ import { readFileSync, type Dirent } from 'fs';
 import { MarkdownParser } from './parsers/markdown-parser.js';
 import type { RootOutput } from './root-selection.js';
 import { discoverSpecFiles } from '../utils/spec-discovery.js';
+import { readChangeMetadata } from '../utils/change-metadata.js';
+import { formatTokenBadge } from '../utils/token-format.js';
+import type { TokenUsage } from './change-metadata/schema.js';
 
 interface ChangeInfo {
   name: string;
   completedTasks: number;
   totalTasks: number;
   lastModified: Date;
+  tokens?: TokenUsage;
 }
 
 interface ListOptions {
@@ -123,11 +127,13 @@ export class ListCommand {
         const progress = await getTaskProgressForChange(changesDir, changeDir, targetPath);
         const changePath = path.join(changesDir, changeDir);
         const lastModified = await getLastModified(changePath);
+        const meta = readChangeMetadata(changePath, targetPath);
         changes.push({
           name: changeDir,
           completedTasks: progress.completed,
           totalTasks: progress.total,
-          lastModified
+          lastModified,
+          tokens: meta?.tokens,
         });
       }
 
@@ -140,13 +146,17 @@ export class ListCommand {
 
       // JSON output for programmatic use
       if (json) {
-        const jsonOutput = changes.map(c => ({
-          name: c.name,
-          completedTasks: c.completedTasks,
-          totalTasks: c.totalTasks,
-          lastModified: c.lastModified.toISOString(),
-          status: c.totalTasks === 0 ? 'no-tasks' : c.completedTasks === c.totalTasks ? 'complete' : 'in-progress'
-        }));
+        const jsonOutput = changes.map(c => {
+          const totalTokens = c.tokens ? (c.tokens.total ?? (c.tokens.input + c.tokens.output)) : undefined;
+          return {
+            name: c.name,
+            completedTasks: c.completedTasks,
+            totalTasks: c.totalTasks,
+            lastModified: c.lastModified.toISOString(),
+            status: c.totalTasks === 0 ? 'no-tasks' : c.completedTasks === c.totalTasks ? 'complete' : 'in-progress',
+            ...(c.tokens ? { tokens: c.tokens, tokenBadge: formatTokenBadge(totalTokens!) } : {}),
+          };
+        });
         console.log(JSON.stringify({ changes: jsonOutput, ...(root ? { root } : {}) }, null, 2));
         return;
       }
@@ -159,7 +169,12 @@ export class ListCommand {
         const paddedName = change.name.padEnd(nameWidth);
         const status = formatTaskStatus({ total: change.totalTasks, completed: change.completedTasks });
         const timeAgo = formatRelativeTime(change.lastModified);
-        console.log(`${padding}${paddedName}     ${status.padEnd(12)}  ${timeAgo}`);
+        let badgeStr = '';
+        if (change.tokens) {
+          const totalTokens = change.tokens.total ?? (change.tokens.input + change.tokens.output);
+          badgeStr = `  [${formatTokenBadge(totalTokens)}]`;
+        }
+        console.log(`${padding}${paddedName}     ${status.padEnd(12)}${badgeStr}  ${timeAgo}`);
       }
       return;
     }

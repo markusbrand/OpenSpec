@@ -20,6 +20,17 @@ export const InitiativeLinkSchema = z.object({
 
 export type InitiativeLink = z.infer<typeof InitiativeLinkSchema>;
 
+export const TokenUsageSchema = z.object({
+  input: z.number().int().nonnegative({ message: 'input tokens must be a non-negative integer' }),
+  output: z.number().int().nonnegative({ message: 'output tokens must be a non-negative integer' }),
+  cached: z.number().int().nonnegative({ message: 'cached tokens must be a non-negative integer' }).optional(),
+  total: z.number().int().nonnegative({ message: 'total tokens must be a non-negative integer' }).optional(),
+  cost_usd: z.number().nonnegative({ message: 'cost_usd must be a non-negative number' }).optional(),
+  updated_at: z.string().optional(),
+}).strict();
+
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+
 // Per-change metadata schema. The schema field is validated against available
 // workflow schemas when metadata is read or written.
 export const ChangeMetadataSchema = z.object({
@@ -46,6 +57,8 @@ export const ChangeMetadataSchema = z.object({
   // tree - only from git - so it is the author's call, not an inference from the
   // shape of a delta.
   retire_capabilities: z.boolean().optional(),
+  tokens: TokenUsageSchema.optional(),
 });
 
 export type ChangeMetadata = z.infer<typeof ChangeMetadataSchema>;
+

@@ -33,6 +33,7 @@ import { registerStoreCommand } from '../commands/store.js';
 import { registerDoctorCommand } from '../commands/doctor.js';
 import { registerContextCommand } from '../commands/context.js';
 import { registerWorksetCommand } from '../commands/workset.js';
+import { registerTokensCommand } from '../commands/tokens.js';
 import {
   statusCommand,
   BATCH_STATUS_FAILURE_PAYLOAD,
@@ -480,6 +481,26 @@ changeCmd
     }
   });
 
+changeCmd
+  .command('record-tokens <change-name>')
+  .description('Record LLM token usage metrics for a change')
+  .requiredOption('--input <tokens>', 'Input token count')
+  .requiredOption('--output <tokens>', 'Output token count')
+  .option('--cached <tokens>', 'Cached input token count')
+  .option('--cost <usd>', 'Estimated cost in USD')
+  .option('--incremental', 'Add to existing recorded tokens (default)')
+  .option('--replace', 'Replace existing recorded tokens')
+  .option('--json', 'Output result as JSON')
+  .action(async (changeName: string, options: { input: string; output: string; cached?: string; cost?: string; incremental?: boolean; replace?: boolean; json?: boolean }) => {
+    try {
+      const changeCommand = new ChangeCommand();
+      await changeCommand.recordTokens(changeName, options);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exitCode = 1;
+    }
+  });
+
 program
   .command('archive [change-name]')
   .description('Archive a completed change and update main specs')
@@ -506,6 +527,7 @@ registerStoreCommand(program);
 registerDoctorCommand(program);
 registerContextCommand(program);
 registerWorksetCommand(program);
+registerTokensCommand(program);
 
 // Top-level validate command
 program

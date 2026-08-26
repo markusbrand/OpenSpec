@@ -28,6 +28,7 @@ import { METADATA_FILENAME, readRetireCapabilitiesMarker, readSkipSpecsMarker } 
 import { confirmPrompt, isNonInteractivePromptError } from '../utils/interactive.js';
 import { FileSystemUtils } from '../utils/file-system.js';
 import { folderStyleNameProblem } from './id.js';
+import { compileTokenLedger } from './tokens/ledger.js';
 
 function isMissingPathError(error: unknown): boolean {
   return (
@@ -2042,6 +2043,13 @@ export class ArchiveCommand {
 
       if (!json) {
         console.log(`Change '${changeName}' archived as '${archiveName}'.`);
+      }
+
+      // Update central token ledger upon successful archiving
+      try {
+        await compileTokenLedger(root.path);
+      } catch {
+        // Non-blocking for archive
       }
 
       return {

@@ -30,10 +30,20 @@ body is machine-updatable and human-readable:
      "specSchema": "spec-driven",
      "lifecycle": "implementing",
      "created": "2026-08-07",
-     "archivedDate": null
+     "archivedDate": null,
+     "tokens": {
+       "input": 124500,
+       "output": 18200,
+       "cached": 45000,
+       "total": 142700,
+       "costUsd": 0.32,
+       "updatedAt": "2026-08-07T10:45:00Z"
+     }
    }
    openspec:metadata-end -->
    ```
+
+   `tokens` is optional: `input`, `output`, and `total` must be non-negative integers; `cached` is an optional non-negative integer; `costUsd` is an optional non-negative number; `updatedAt` is an optional ISO timestamp. If `total` is omitted during recording, it defaults to `input + output`. Existing issues without `tokens` remain valid.
 
    `changeName` (kebab-case) is the unique identifier — **not** the issue title.
    The issue number is the durable external reference.
@@ -115,7 +125,21 @@ no partial success is claimed.
 | `set-metadata <issue> --key <k> --value <v>` | Update one metadata field, preserving the rest. Post-write validated with rollback on failure. |
 | `set-lifecycle <issue> <lifecycle>` | Enforce the documented transition, then atomically update label, state, and metadata; on any failure (label, close/reopen, body/metadata, or post-validation) it restores the prior body, labels, and state and reports failure with no success output. |
 | `validate <issue>` | Post-write validation of the full schema above plus: exactly one lifecycle label equal to metadata `lifecycle`, and issue state consistent with lifecycle (`completed` ⇔ closed). |
+| `record-tokens <issue> --input <N> --output <M> [--cached <K>] [--cost <USD>] [--incremental\|--replace]` | Record token usage metrics in metadata and synchronize dynamic `tokens:<badge>` label. |
+| `get-tokens <issue>` | Print structured JSON token metrics from issue metadata. |
+| `refresh-token-label <issue>` | Synchronize the dynamic `tokens:<badge>` label from metadata. |
+| `aggregate-tokens [--output-json <path>] [--output-md <path>]` | Aggregate token totals across OpenSpec issues and write central JSON and Markdown ledgers. |
 | `scan-content --body-file <f>` | Reject secrets / private flight data before publishing. |
+
+### Dynamic token labels
+
+Issues with recorded tokens carry an auxiliary badge label formatted as `tokens:<compact>`:
+- `< 1,000`: `tokens:<1k` (`#cfd3d7`)
+- `1,000 - 99,999`: `tokens:XXk` (`#0e8a16`)
+- `100,000 - 999,999`: `tokens:XXXk` (`#fbca04`)
+- `1,000,000+`: `tokens:X.XM` (`#d93f0b`)
+
+When tokens are updated, prior `tokens:*` labels are removed and the new label is attached.
 
 Discovery (`list`, `find`, and `create`'s duplicate check) retrieves **all**
 matching issues via REST pagination (`OPENSPEC_ISSUE_PER_PAGE`, default 100), so
