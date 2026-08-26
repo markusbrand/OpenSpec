@@ -49,6 +49,9 @@ order, and stop where a step tells you to stop.
 4. INITIALIZE. Ask me which AI coding tool or tools I use and map each to an id
    from `openspec init --help` (Copilot is `github-copilot`, Zoo Code is
    `roocode`). `--tools` takes a comma-separated list, so name all of them.
+   Also ask if I want specs tracked in Markdown files (`--schema spec-driven`
+   or `--spec-source markdown`) or GitHub Issues (`--schema spec-driven-github`
+   or `--spec-source github-issues`).
    `openspec init --tools <ids>` deletes leftovers from older OpenSpec versions
    automatically, without asking — including `opsx-*.md` prompt files in my home
    directory (Codex keeps them in ~/.codex/prompts). Before you run it, look for
@@ -59,7 +62,7 @@ order, and stop where a step tells you to stop.
    refreshes it and leaves my specs and changes alone.
    Confirm I'm in the right folder too: init creates `openspec/` wherever it
    runs, including inside a monorepo package.
-   Then run: openspec init --tools <ids>
+   Then run: openspec init --tools <ids> [--schema <schema>]
 
 5. REPORT. Don't assume what should exist — tell me what init actually printed:
    how many skills and/or commands it created and where, the config file line,

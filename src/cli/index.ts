@@ -226,7 +226,9 @@ program
   .option('--no-animation', 'Show a static welcome screen instead of the animated one')
   .option('--copilot-cloud', 'Set up GitHub Copilot cloud coding-agent files without prompting')
   .option('--no-copilot-cloud', 'Skip GitHub Copilot cloud coding-agent files without prompting')
-  .action(async (targetPath = '.', options?: { tools?: string; language?: string; force?: boolean; profile?: string; animation?: boolean; copilotCloud?: boolean }) => {
+  .option('--schema <schema>', 'Workflow schema to use (spec-driven for markdown files, spec-driven-github for GitHub issues)')
+  .option('--spec-source <source>', 'Alias for --schema (markdown or github-issues)')
+  .action(async (targetPath = '.', options?: { tools?: string; language?: string; force?: boolean; profile?: string; animation?: boolean; copilotCloud?: boolean; schema?: string; specSource?: string }) => {
     try {
       // Validate that the path is a valid directory
       const resolvedPath = path.resolve(targetPath);
@@ -255,6 +257,8 @@ program
         profile: options?.profile,
         animation: options?.animation,
         copilotCloud: options?.copilotCloud,
+        schema: options?.schema,
+        specSource: options?.specSource,
       });
       await initCommand.execute(targetPath);
     } catch (error) {

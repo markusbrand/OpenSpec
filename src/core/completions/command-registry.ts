@@ -33,6 +33,16 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
         description: 'Show a static welcome screen instead of the animated one',
       },
       {
+        name: 'schema',
+        description: 'Workflow schema to use (spec-driven for markdown files, spec-driven-github for GitHub issues)',
+        takesValue: true,
+      },
+      {
+        name: 'spec-source',
+        description: 'Alias for --schema (markdown or github-issues)',
+        takesValue: true,
+      },
+      {
         name: 'copilot-cloud',
         description: 'Generate GitHub Copilot cloud coding-agent files (opt-in; default: prompt)',
       },

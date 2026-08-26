@@ -28,6 +28,7 @@ import {
 import { PALETTE } from './styles/palette.js';
 import { isInteractive } from '../utils/interactive.js';
 import { serializeConfig } from './config-prompts.js';
+import { listSchemas } from './artifact-graph/resolver.js';
 import {
   generateCommands,
   CommandAdapterRegistry,
@@ -134,6 +135,15 @@ type InitCommandOptions = {
    * leaves the decision to config, migration, or an interactive prompt.
    */
   copilotCloud?: boolean;
+  /**
+   * Target workflow schema for specs (e.g., 'spec-driven' for markdown files,
+   * 'spec-driven-github' for GitHub issues).
+   */
+  schema?: string;
+  /**
+   * Alias for schema (e.g. 'markdown' -> 'spec-driven', 'github-issues' -> 'spec-driven-github').
+   */
+  specSource?: string;
 };
 
 type ValidatedInitTool = {
@@ -167,6 +177,7 @@ export class InitCommand {
   private readonly profileOverride?: string;
   private readonly animation: boolean;
   private readonly copilotCloudOption?: boolean;
+  private readonly schemaArg?: string;
 
   constructor(options: InitCommandOptions = {}) {
     this.toolsArg = options.tools;
@@ -176,6 +187,7 @@ export class InitCommand {
     this.profileOverride = options.profile;
     this.animation = options.animation ?? true;
     this.copilotCloudOption = options.copilotCloud;
+    this.schemaArg = options.schema ?? options.specSource;
   }
 
   async execute(targetPath: string): Promise<void> {
@@ -214,6 +226,7 @@ export class InitCommand {
     }
 
     await this.assertLanguageCanBeApplied(projectPath, openspecPath);
+    await this.assertSchemaCanBeApplied(projectPath, openspecPath);
 
     // Check for legacy artifacts and handle cleanup
     const deferredLegacyCleanup = await this.handleLegacyCleanup(projectPath, extendMode);
@@ -273,6 +286,9 @@ export class InitCommand {
     // config.yaml exists so future non-interactive updates honor it.
     const copilotDecision = await this.resolveCopilotCloudDecision(projectPath, validatedTools);
 
+    // Resolve the workflow schema / spec single source of truth.
+    const resolvedSchema = await this.resolveSchemaDecision(projectPath, openspecPath);
+
     // Create directory structure and config
     await this.createDirectoryStructure(openspecPath, extendMode);
 
@@ -290,7 +306,7 @@ export class InitCommand {
     }
 
     // Create config.yaml if needed
-    const configStatus = await this.createConfig(openspecPath, extendMode);
+    const configStatus = await this.createConfig(openspecPath, extendMode, resolvedSchema);
 
     // Persist an explicit Copilot cloud decision so `openspec update` (which
     // never prompts) honors it. Best-effort: a config-write failure must not
@@ -328,13 +344,20 @@ export class InitCommand {
     const copilotCollisions = wroteCloud ? await findUnmanagedCloudFiles(projectPath) : [];
 
     // Display success message
-    this.displaySuccessMessage(projectPath, validatedTools, results, configStatus, {
-      write: copilotDecision.write,
-      skippedUndecided: copilotDecision.skippedUndecided,
-      present: copilotPresent,
-      collisions: copilotCollisions,
-      removed: copilotRemoved,
-    });
+    this.displaySuccessMessage(
+      projectPath,
+      validatedTools,
+      results,
+      configStatus,
+      {
+        write: copilotDecision.write,
+        skippedUndecided: copilotDecision.skippedUndecided,
+        present: copilotPresent,
+        collisions: copilotCollisions,
+        removed: copilotRemoved,
+      },
+      resolvedSchema
+    );
     if (results.failedTools.length > 0) {
       throw new Error(
         `OpenSpec setup failed for: ${results.failedTools.map((tool) => tool.name).join(', ')}`
@@ -1084,7 +1107,106 @@ export class InitCommand {
     );
   }
 
-  private async createConfig(openspecPath: string, extendMode: boolean): Promise<'created' | 'exists' | 'skipped'> {
+  private normalizeSchema(schema: string | undefined, projectPath: string): string | undefined {
+    if (schema === undefined) return undefined;
+
+    const normalized = schema.trim();
+    if (!normalized) {
+      throw new Error('The --schema option requires a non-empty value.');
+    }
+
+    const lower = normalized.toLowerCase();
+    let resolved = normalized;
+    if (lower === 'markdown' || lower === 'md' || lower === 'files' || lower === 'file') {
+      resolved = 'spec-driven';
+    } else if (
+      lower === 'github' ||
+      lower === 'github-issues' ||
+      lower === 'issues' ||
+      lower === 'gh' ||
+      lower === 'gh-issues'
+    ) {
+      resolved = 'spec-driven-github';
+    }
+
+    const availableSchemas = listSchemas(projectPath);
+    if (!availableSchemas.includes(resolved)) {
+      throw new Error(
+        `Invalid schema "${schema}". Available schemas: ${availableSchemas.join(', ')}`
+      );
+    }
+
+    return resolved;
+  }
+
+  private async assertSchemaCanBeApplied(
+    projectPath: string,
+    openspecPath: string
+  ): Promise<void> {
+    if (this.schemaArg === undefined) return;
+
+    const requestedSchema = this.normalizeSchema(this.schemaArg, projectPath);
+    const configPath = path.join(openspecPath, 'config.yaml');
+    const configYmlPath = path.join(openspecPath, 'config.yml');
+    const hasConfig = fs.existsSync(configPath) || fs.existsSync(configYmlPath);
+
+    if (hasConfig) {
+      const existingConfig = readProjectConfig(projectPath);
+      if (existingConfig?.schema && existingConfig.schema !== requestedSchema) {
+        throw new Error(
+          `--schema does not overwrite an existing OpenSpec config (current: ${existingConfig.schema}). ` +
+          `Update the schema field in openspec/config.yaml instead.`
+        );
+      }
+    }
+  }
+
+  private async resolveSchemaDecision(
+    projectPath: string,
+    openspecPath: string
+  ): Promise<string> {
+    if (this.schemaArg !== undefined) {
+      return this.normalizeSchema(this.schemaArg, projectPath)!;
+    }
+
+    const configPath = path.join(openspecPath, 'config.yaml');
+    const configYmlPath = path.join(openspecPath, 'config.yml');
+    if (fs.existsSync(configPath) || fs.existsSync(configYmlPath)) {
+      const existingConfig = readProjectConfig(projectPath);
+      if (existingConfig?.schema) {
+        return existingConfig.schema;
+      }
+    }
+
+    if (this.canPromptInteractively()) {
+      const { select } = await import('@inquirer/prompts');
+      const chosen = await select({
+        message: 'Choose single source of truth for specs:',
+        choices: [
+          {
+            name: 'Markdown files (openspec/specs/ - local spec-driven workflow)',
+            value: 'spec-driven',
+            description: 'Specifications are stored as Markdown files in your repository',
+          },
+          {
+            name: 'GitHub Issues (spec-driven-github - track specs in GitHub Issues)',
+            value: 'spec-driven-github',
+            description: 'Specifications and change tracking are managed via GitHub Issues',
+          },
+        ],
+        default: 'spec-driven',
+      });
+      return chosen;
+    }
+
+    return DEFAULT_SCHEMA;
+  }
+
+  private async createConfig(
+    openspecPath: string,
+    extendMode: boolean,
+    schema: string = DEFAULT_SCHEMA
+  ): Promise<'created' | 'exists' | 'skipped'> {
     const configPath = path.join(openspecPath, 'config.yaml');
     const configYmlPath = path.join(openspecPath, 'config.yml');
     const configYamlExists = fs.existsSync(configPath);
@@ -1097,7 +1219,7 @@ export class InitCommand {
 
     try {
       const yamlContent = serializeConfig({
-        schema: DEFAULT_SCHEMA,
+        schema,
         context: this.languageContext(),
       });
       FileSystemUtils.assertProjectArtifactPath(path.dirname(openspecPath), configPath);
@@ -1135,7 +1257,8 @@ export class InitCommand {
       present: string[];
       collisions: string[];
       removed: number;
-    }
+    },
+    resolvedSchema: string = DEFAULT_SCHEMA
   ): void {
     console.log();
     console.log(
@@ -1279,7 +1402,7 @@ export class InitCommand {
 
     // Config status
     if (configStatus === 'created') {
-      console.log(`Config: openspec/config.yaml (schema: ${DEFAULT_SCHEMA})`);
+      console.log(`Config: openspec/config.yaml (schema: ${resolvedSchema})`);
     } else if (configStatus === 'exists') {
       // Show actual filename (config.yaml or config.yml)
       const configYaml = path.join(projectPath, OPENSPEC_DIR_NAME, 'config.yaml');

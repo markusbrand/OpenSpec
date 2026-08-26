@@ -7,14 +7,16 @@ import { saveGlobalConfig, getGlobalConfig } from '../../src/core/global-config.
 import { MAX_CONTEXT_SIZE, readProjectConfig } from '../../src/core/project-config.js';
 import { FileSystemUtils } from '../../src/utils/file-system.js';
 
-const { confirmMock, showWelcomeScreenMock, searchableMultiSelectMock } = vi.hoisted(() => ({
+const { confirmMock, selectMock, showWelcomeScreenMock, searchableMultiSelectMock } = vi.hoisted(() => ({
   confirmMock: vi.fn(),
+  selectMock: vi.fn(),
   showWelcomeScreenMock: vi.fn().mockResolvedValue(undefined),
   searchableMultiSelectMock: vi.fn(),
 }));
 
 vi.mock('@inquirer/prompts', () => ({
   confirm: confirmMock,
+  select: selectMock,
 }));
 
 vi.mock('../../src/ui/welcome-screen.js', () => ({
@@ -44,6 +46,8 @@ describe('InitCommand', () => {
     vi.spyOn(console, 'log').mockImplementation(() => { });
     confirmMock.mockReset();
     confirmMock.mockResolvedValue(true);
+    selectMock.mockReset();
+    selectMock.mockResolvedValue('spec-driven');
     showWelcomeScreenMock.mockClear();
     searchableMultiSelectMock.mockReset();
   });
@@ -78,6 +82,102 @@ describe('InitCommand', () => {
 
       const content = await fs.readFile(configPath, 'utf-8');
       expect(content).toContain('schema: spec-driven');
+    });
+
+    it('should create config.yaml with spec-driven-github schema when requested via --schema', async () => {
+      const initCommand = new InitCommand({
+        tools: 'claude',
+        force: true,
+        schema: 'spec-driven-github',
+      });
+
+      await initCommand.execute(testDir);
+
+      const configPath = path.join(testDir, 'openspec', 'config.yaml');
+      const content = await fs.readFile(configPath, 'utf-8');
+      expect(content).toContain('schema: spec-driven-github');
+    });
+
+    it('should resolve schema aliases: markdown and github-issues', async () => {
+      const markdownInit = new InitCommand({
+        tools: 'none',
+        force: true,
+        schema: 'markdown',
+      });
+      await markdownInit.execute(testDir);
+      const configPath = path.join(testDir, 'openspec', 'config.yaml');
+      expect(await fs.readFile(configPath, 'utf-8')).toContain('schema: spec-driven');
+
+      await fs.rm(configPath);
+      const githubInit = new InitCommand({
+        tools: 'none',
+        force: true,
+        specSource: 'github-issues',
+      });
+      await githubInit.execute(testDir);
+      expect(await fs.readFile(configPath, 'utf-8')).toContain('schema: spec-driven-github');
+    });
+
+    it('should reject invalid schema names with available schemas list', async () => {
+      const initCommand = new InitCommand({
+        tools: 'none',
+        force: true,
+        schema: 'invalid-schema-name',
+      });
+
+      await expect(initCommand.execute(testDir)).rejects.toThrow(
+        'Invalid schema "invalid-schema-name". Available schemas: spec-driven, spec-driven-github'
+      );
+    });
+
+    it('should reject empty --schema option', async () => {
+      const initCommand = new InitCommand({
+        tools: 'none',
+        force: true,
+        schema: '   ',
+      });
+
+      await expect(initCommand.execute(testDir)).rejects.toThrow(
+        'The --schema option requires a non-empty value.'
+      );
+    });
+
+    it('should not overwrite an existing config when --schema conflicts', async () => {
+      const openspecPath = path.join(testDir, 'openspec');
+      await fs.mkdir(path.join(openspecPath, 'changes', 'archive'), { recursive: true });
+      await fs.mkdir(path.join(openspecPath, 'specs'), { recursive: true });
+      const configPath = path.join(openspecPath, 'config.yaml');
+      const originalConfig = 'schema: spec-driven\n';
+      await fs.writeFile(configPath, originalConfig, 'utf-8');
+
+      const initCommand = new InitCommand({
+        tools: 'none',
+        force: true,
+        schema: 'spec-driven-github',
+      });
+
+      await expect(initCommand.execute(testDir)).rejects.toThrow(
+        '--schema does not overwrite an existing OpenSpec config (current: spec-driven)',
+      );
+      expect(await fs.readFile(configPath, 'utf-8')).toBe(originalConfig);
+    });
+
+    it('should allow re-running init when --schema matches existing config', async () => {
+      const openspecPath = path.join(testDir, 'openspec');
+      await fs.mkdir(path.join(openspecPath, 'changes', 'archive'), { recursive: true });
+      await fs.mkdir(path.join(openspecPath, 'specs'), { recursive: true });
+      const configPath = path.join(openspecPath, 'config.yaml');
+      const originalConfig = 'schema: spec-driven-github\n';
+      await fs.writeFile(configPath, originalConfig, 'utf-8');
+
+      const initCommand = new InitCommand({
+        tools: 'none',
+        force: true,
+        schema: 'spec-driven-github',
+      });
+
+      await initCommand.execute(testDir);
+      expect(await fs.readFile(configPath, 'utf-8')).toBe(originalConfig);
     });
 
     it('should add the requested artifact language to a new config', async () => {
@@ -1456,6 +1556,8 @@ describe('InitCommand - profile and detection features', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     confirmMock.mockReset();
     confirmMock.mockResolvedValue(true);
+    selectMock.mockReset();
+    selectMock.mockResolvedValue('spec-driven');
     showWelcomeScreenMock.mockClear();
     searchableMultiSelectMock.mockReset();
   });
@@ -1717,6 +1819,73 @@ describe('InitCommand - profile and detection features', () => {
     ).toBe(true);
     const config = await fs.readFile(path.join(testDir, 'openspec', 'config.yaml'), 'utf8');
     expect(config).toContain('cloudAgent: false');
+  });
+
+  it('interactive init: prompts user for spec source and configures spec-driven when selected', async () => {
+    searchableMultiSelectMock.mockResolvedValue(['claude']);
+    selectMock.mockResolvedValue('spec-driven');
+
+    const initCommand = new InitCommand({});
+    vi.spyOn(initCommand as any, 'canPromptInteractively').mockReturnValue(true);
+    await initCommand.execute(testDir);
+
+    expect(selectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Choose single source of truth for specs:',
+        choices: expect.arrayContaining([
+          expect.objectContaining({ value: 'spec-driven' }),
+          expect.objectContaining({ value: 'spec-driven-github' }),
+        ]),
+      })
+    );
+
+    const config = await fs.readFile(path.join(testDir, 'openspec', 'config.yaml'), 'utf8');
+    expect(config).toContain('schema: spec-driven');
+  });
+
+  it('interactive init: prompts user for spec source and configures spec-driven-github when selected', async () => {
+    searchableMultiSelectMock.mockResolvedValue(['claude']);
+    selectMock.mockResolvedValue('spec-driven-github');
+
+    const initCommand = new InitCommand({});
+    vi.spyOn(initCommand as any, 'canPromptInteractively').mockReturnValue(true);
+    await initCommand.execute(testDir);
+
+    expect(selectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Choose single source of truth for specs:',
+      })
+    );
+
+    const config = await fs.readFile(path.join(testDir, 'openspec', 'config.yaml'), 'utf8');
+    expect(config).toContain('schema: spec-driven-github');
+  });
+
+  it('interactive init: does not prompt for schema when config already exists', async () => {
+    await fs.mkdir(path.join(testDir, 'openspec'), { recursive: true });
+    await fs.writeFile(path.join(testDir, 'openspec', 'config.yaml'), 'schema: spec-driven-github\n', 'utf8');
+
+    searchableMultiSelectMock.mockResolvedValue(['claude']);
+
+    const initCommand = new InitCommand({});
+    vi.spyOn(initCommand as any, 'canPromptInteractively').mockReturnValue(true);
+    await initCommand.execute(testDir);
+
+    expect(selectMock).not.toHaveBeenCalled();
+    const config = await fs.readFile(path.join(testDir, 'openspec', 'config.yaml'), 'utf8');
+    expect(config).toContain('schema: spec-driven-github');
+  });
+
+  it('interactive init: does not prompt for schema when --schema is explicitly provided', async () => {
+    searchableMultiSelectMock.mockResolvedValue(['claude']);
+
+    const initCommand = new InitCommand({ schema: 'spec-driven-github' });
+    vi.spyOn(initCommand as any, 'canPromptInteractively').mockReturnValue(true);
+    await initCommand.execute(testDir);
+
+    expect(selectMock).not.toHaveBeenCalled();
+    const config = await fs.readFile(path.join(testDir, 'openspec', 'config.yaml'), 'utf8');
+    expect(config).toContain('schema: spec-driven-github');
   });
 
   it('re-init with --no-copilot-cloud removes previously generated managed cloud files', async () => {

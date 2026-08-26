@@ -55,9 +55,11 @@ init creates `openspec/` wherever you point it and won't warn you when that's wr
 
 Then work out which AI coding tools the user works with, and again lead with an inference instead of an open question: you are probably running inside one of them, so name it and ask what else they use, suggesting a few common options (Claude Code, Cursor, Copilot, Codex). Say what the answer changes: each tool named gets its own skill and command files in the project, and re-running init later adds more, so a short list now costs nothing. Map each tool to an id from `openspec init --help` (Copilot is `github-copilot`, Zoo Code is `roocode`). `--tools` takes a comma-separated list, so name all of them.
 
+Also check if the user wants their single source of truth for specs stored in **Markdown files** (default: `openspec/specs/` and `openspec/changes/`, via `--schema spec-driven` or `--spec-source markdown`) or in **GitHub Issues** (via `--schema spec-driven-github` or `--spec-source github-issues`). When running interactively without `--schema`, `openspec init` will prompt to choose between Markdown files and GitHub Issues.
+
 `openspec init --tools <ids>` deletes leftovers from older OpenSpec versions automatically, without asking, including `opsx-*.md` prompt files in the home directory (Codex keeps them in `~/.codex/prompts`). Before running it, look for those: `.../commands/openspec/` folders, OpenSpec marker blocks in files like CLAUDE.md or AGENTS.md, and home-directory `opsx-*.md` prompts. List whatever you find, say plainly that init will delete these, and wait for a go-ahead; if you find nothing, say so and carry on without asking. An existing `openspec/` folder is not a problem: init refreshes it and leaves specs and changes alone.
 
-Then run: `openspec init --tools <ids>`, adding the path when it isn't the current folder.
+Then run: `openspec init <path> --tools <ids> [--schema spec-driven|spec-driven-github]`, adding the path when it isn't the current folder.
 
 ## 5. Report
 
