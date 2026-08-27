@@ -7,7 +7,7 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
-  generatedBy: "3.1.0"
+  generatedBy: "3.1.1"
 ---
 
 Archive a completed change in the experimental workflow.

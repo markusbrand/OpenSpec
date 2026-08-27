@@ -336,6 +336,15 @@ The archive command SHALL validate changes before applying them to ensure data i
 - **THEN** skip validation (unsafe mode)
 - **AND** show warning about skipping validation
 
+### Requirement: Central Token Usage Ledger Compilation
+
+The archive command SHALL compile cumulative token usage metrics into the central repository ledger upon change archival.
+
+#### Scenario: Update ledger on archive
+- **WHEN** a change is archived successfully
+- **THEN** scan all active and archived changes
+- **AND** update `openspec/token-usage.json` and `openspec/token-usage.md` with current project token totals and per-change breakdown
+
 ## Why These Decisions
 
 **Interactive selection**: Reduces typing and helps users see available changes
