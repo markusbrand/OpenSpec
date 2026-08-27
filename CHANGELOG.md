@@ -1,5 +1,12 @@
 # @fission-ai/openspec
 
+## [3.2.0](https://github.com/markusbrand/OpenSpec/compare/v3.1.1...v3.2.0) (2026-08-27)
+
+
+### Features
+
+* **tokens:** track token usage, update archive spec, and initialize central ledger ([#4](https://github.com/markusbrand/OpenSpec/issues/4)) ([5b3fb26](https://github.com/markusbrand/OpenSpec/commit/5b3fb26304601fd2dae99cfc3a0031d28f2d22bf))
+
 ## [3.1.1](https://github.com/markusbrand/OpenSpec/compare/v3.1.0...v3.1.1) (2026-08-27)
 
 
