@@ -1,5 +1,13 @@
 # @fission-ai/openspec
 
+## [3.1.1](https://github.com/markusbrand/OpenSpec/compare/v3.1.0...v3.1.1) (2026-08-27)
+
+
+### Miscellaneous Chores
+
+* initialize openspec with antigravity and spec-driven-github schema ([37355e8](https://github.com/markusbrand/OpenSpec/commit/37355e814145f68b59f80467f7e15a86607b6ee5))
+* rename package to @markusbrand/openspec and set default repo to github:markusbrand/OpenSpec ([044d02c](https://github.com/markusbrand/OpenSpec/commit/044d02c95c6531a2c650d6be1da8009fa47a8335))
+
 ## [3.1.0](https://github.com/markusbrand/OpenSpec/compare/v3.0.0...v3.1.0) (2026-08-26)
 
 
