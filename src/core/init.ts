@@ -1522,8 +1522,8 @@ export class InitCommand {
 
     // Links
     console.log();
-    console.log(`Learn more: ${chalk.cyan('https://github.com/Fission-AI/OpenSpec')}`);
-    console.log(`Feedback:   ${chalk.cyan('https://github.com/Fission-AI/OpenSpec/issues')}`);
+    console.log(`Learn more: ${chalk.cyan('https://github.com/markusbrand/OpenSpec')}`);
+    console.log(`Feedback:   ${chalk.cyan('https://github.com/markusbrand/OpenSpec/issues')}`);
 
     // Restart instruction only when at least one IDE/editor-resident tool
     // actually received a generated surface. Two conditions, coupled to the SAME

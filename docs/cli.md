@@ -184,7 +184,7 @@ openspec update [path] [options]
 
 ```bash
 # Update instruction files after npm upgrade
-npm install -g @fission-ai/openspec@latest
+npm install -g github:markusbrand/OpenSpec --allow-git=all
 openspec update
 ```
 
@@ -194,20 +194,20 @@ To make that visible, `openspec update` asks the npm registry whether a newer CL
 
 ```text
 A newer OpenSpec CLI is available (v1.6.0 → v1.7.0).
-  Running from: /usr/local/lib/node_modules/@fission-ai/openspec
+  Running from: /usr/local/lib/node_modules/@markusbrand/openspec
 ? Upgrade to v1.7.0 now? (Y/n)
 ```
 
-Answer yes and it runs `npm install -g @fission-ai/openspec@latest`, then re-runs the update with the new CLI so the new workflows land in the same command. It confirms the upgrade by asking the installed binary its version rather than trusting npm's exit code, so if another install earlier on your `PATH` is still answering, it tells you instead of claiming success. Answer no and it prints the command and updates with the CLI you have. Ctrl-C stops the command.
+Answer yes and it runs `npm install -g github:markusbrand/OpenSpec --allow-git=all`, then re-runs the update with the new CLI so the new workflows land in the same command. It confirms the upgrade by asking the installed binary its version rather than trusting npm's exit code, so if another install earlier on your `PATH` is still answering, it tells you instead of claiming success. Answer no and it prints the command and updates with the CLI you have. Ctrl-C stops the command.
 
 The offer appears only in an interactive terminal, and only when npm owns the install — the one case `npm install -g` actually fixes. Everything else gets the command that matches how it was installed instead:
 
 | How OpenSpec is installed | What you get |
 |---------------------------|--------------|
 | Global npm install | The prompt, and the upgrade run for you — in an interactive terminal; piped output gets the printed command instead |
-| Global pnpm, bun, yarn, or volta install | That manager's own command: `pnpm add -g …@latest`, `bun add -g …@latest`, `yarn global add …@latest`, or `volta install …@latest` |
+| Global pnpm, bun, yarn, or volta install | That manager's own command: `pnpm add -g …`, `bun add -g …`, `yarn global add …`, or `volta install …` |
 | A dependency of the project | A note to update the dependency, since its package manager owns the lockfile |
-| An `npx` / `dlx` cache | `npx @fission-ai/openspec@latest update` — that command is the update, so there is no second step |
+| An `npx` / `dlx` cache | `npx -p github:markusbrand/OpenSpec openspec update` — that command is the update, so there is no second step |
 | A git clone | Nothing — your version is whatever the branch says |
 
 Whenever anything is printed, it names the directory the running CLI was loaded from — the thing to check when you did upgrade but a stale shim still owns your `PATH`.
@@ -1091,7 +1091,7 @@ openspec schema which spec-driven
 
 ```
 spec-driven resolves from: package
-  Source: /usr/local/lib/node_modules/@fission-ai/openspec/schemas/spec-driven
+  Source: /usr/local/lib/node_modules/@markusbrand/openspec/schemas/spec-driven
 ```
 
 **Schema precedence:**

@@ -456,11 +456,11 @@ export function detectPackageManager(installDir: string | null): PackageManager 
 }
 
 const GLOBAL_UPGRADE_COMMANDS: Record<PackageManager, string> = {
-  npm: `npm install -g ${PACKAGE_NAME}@latest`,
-  pnpm: `pnpm add -g ${PACKAGE_NAME}@latest`,
-  bun: `bun add -g ${PACKAGE_NAME}@latest`,
-  yarn: `yarn global add ${PACKAGE_NAME}@latest`,
-  volta: `volta install ${PACKAGE_NAME}@latest`,
+  npm: `npm install -g github:markusbrand/OpenSpec --allow-git=all`,
+  pnpm: `pnpm add -g github:markusbrand/OpenSpec`,
+  bun: `bun add -g github:markusbrand/OpenSpec`,
+  yarn: `yarn global add github:markusbrand/OpenSpec`,
+  volta: `volta install github:markusbrand/OpenSpec`,
 };
 
 /**

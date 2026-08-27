@@ -1,5 +1,5 @@
 {
-  "name": "@fission-ai/openspec",
+  "name": "@markusbrand/openspec",
   "version": "3.1.0",
   "description": "AI-native system for spec-driven development",
   "keywords": [
@@ -9,10 +9,10 @@
     "ai",
     "development"
   ],
-  "homepage": "https://github.com/Fission-AI/OpenSpec",
+  "homepage": "https://github.com/markusbrand/OpenSpec",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Fission-AI/OpenSpec"
+    "url": "https://github.com/markusbrand/OpenSpec"
   },
   "license": "MIT",
   "author": "OpenSpec Contributors",

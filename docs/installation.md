@@ -19,10 +19,10 @@ order, and stop where a step tells you to stop.
    versions, or reconfigure my version manager for me.
 
 2. INSTALL. Use whichever package manager is already on my PATH, preferring npm:
-     npm install -g @fission-ai/openspec@latest
-     pnpm add -g @fission-ai/openspec@latest
-     bun add -g @fission-ai/openspec@latest
-     yarn global add @fission-ai/openspec@latest   (Yarn 1.x only)
+     npm install -g github:markusbrand/OpenSpec --allow-git=all
+     pnpm add -g github:markusbrand/OpenSpec
+     bun add -g github:markusbrand/OpenSpec
+     yarn global add github:markusbrand/OpenSpec   (Yarn 1.x only)
    Don't pick based on this project's lockfile — a global install has nothing to
    do with how this repo's own dependencies are installed. If none of those four
    is available, stop and tell me — don't improvise an install. (If I'm on Nix,
@@ -84,19 +84,19 @@ Nothing in the prompt is vendor-specific: it's plain instructions plus the same 
 ### npm
 
 ```bash
-npm install -g @fission-ai/openspec@latest
+npm install -g github:markusbrand/OpenSpec --allow-git=all
 ```
 
 ### pnpm
 
 ```bash
-pnpm add -g @fission-ai/openspec@latest
+pnpm add -g github:markusbrand/OpenSpec
 ```
 
 ### yarn
 
 ```bash
-yarn global add @fission-ai/openspec@latest
+yarn global add github:markusbrand/OpenSpec
 ```
 
 Yarn 2 and later (Berry) removed the `global` command. On those versions, install OpenSpec with npm, pnpm, or bun instead — a global CLI doesn't need to share your project's package manager.
@@ -109,11 +109,11 @@ If that happens, you could try to change the @latest tag with the version, somet
 ```bash
 deno install --global \
   --allow-read --allow-write --allow-env --allow-sys=cpus,homedir --allow-net=edge.openspec.dev \
-  npm:@fission-ai/openspec@latest
+  npm:@markusbrand/openspec@latest
 # or
 deno install --global \
   --allow-read --allow-write --allow-env --allow-sys=cpus,homedir --allow-net=edge.openspec.dev \
-  npm:@fission-ai/openspec@^1.3.1
+  npm:@markusbrand/openspec@^1.3.1
 ```
 
 Note: If your subcommands launch external tools, like config edit, feedback, or workspace open, you may need a scoped --allow-run=<program>.
@@ -124,7 +124,7 @@ Bun can install OpenSpec globally, but OpenSpec currently runs on Node.js.
 You still need Node.js 20.19.0 or higher available on `PATH`.
 
 ```bash
-bun add -g @fission-ai/openspec@latest
+bun add -g github:markusbrand/OpenSpec
 ```
 
 ## Nix
@@ -132,13 +132,13 @@ bun add -g @fission-ai/openspec@latest
 Run OpenSpec directly without installation:
 
 ```bash
-nix run github:Fission-AI/OpenSpec -- init
+nix run github:markusbrand/OpenSpec -- init
 ```
 
 Or install to your profile:
 
 ```bash
-nix profile install github:Fission-AI/OpenSpec
+nix profile install github:markusbrand/OpenSpec
 ```
 
 Or add to your development environment in `flake.nix`:
@@ -147,7 +147,7 @@ Or add to your development environment in `flake.nix`:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    openspec.url = "github:Fission-AI/OpenSpec";
+    openspec.url = "github:markusbrand/OpenSpec";
   };
 
   outputs = { nixpkgs, openspec, ... }: {
@@ -169,7 +169,7 @@ openspec --version
 Upgrade the package, then refresh each project's generated files:
 
 ```bash
-npm install -g @fission-ai/openspec@latest   # or pnpm/yarn/bun equivalent
+npm install -g github:markusbrand/OpenSpec --allow-git=all   # or pnpm/yarn/bun equivalent
 openspec update                              # run inside each project
 ```
 
@@ -182,7 +182,7 @@ There's no `openspec uninstall` command, because OpenSpec is just a global packa
 **1. Remove the global package:**
 
 ```bash
-npm uninstall -g @fission-ai/openspec   # or: pnpm rm -g / yarn global remove / bun rm -g
+npm uninstall -g @markusbrand/openspec   # or: pnpm rm -g / yarn global remove / bun rm -g
 ```
 
 **2. Remove OpenSpec from a project (optional).** Delete the `openspec/` directory if you no longer want its specs and changes:
